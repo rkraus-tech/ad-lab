@@ -22,3 +22,16 @@
 - Host pve01: 15.5 GiB RAM (~4.2 GiB used), `local` ~57 GB free, `local-lvm` (LVM-Thin) ~147 GB free -> enough for DC (60 GB) and client (64 GB) even if fully allocated.
 - Existing VM 125 (ops01, Jenkins from the release-ops-pipeline project) reserves 4 GiB RAM.
 - Decision: Shut down ops01 (graceful ACPI shutdown, not Stop, to protect PostgreSQL) during the AD lab to free RAM for the two Windows VMs.
+
+## Phase 2 - Design decisions
+- Network: Lab VMs on the home network (bridge vmbr0, 192.168.2.0/24) with static IPs from the homelab range .20-.49. Reason: internet access for evaluation activation/updates, direct RDP from the laptop, simple setup; later projects (Help-Desk-Lab, ticketing) reuse the domain. Network segmentation is planned for the separate OPNsense/VLAN project.
+  - Consequence: DC01 runs AD DS + DNS only, no DHCP (would conflict with the Speedport DHCP server); the client gets its DNS server (DC01) configured statically.
+- Domain: `lab.home.arpa`, NetBIOS name `LAB`. `home.arpa` is reserved for home networks (RFC 8375) and can never collide with a public domain; `.local` avoided (mDNS conflicts, discouraged by Microsoft). In a company: subdomain of the registered company domain.
+- IP plan (convention from release-ops-pipeline: VM ID = last octet):
+  | VM ID | Hostname | IP | Role |
+  |---|---|---|---|
+  | 121 | DC01 | 192.168.2.21/24 | Domain controller (AD DS, DNS) |
+  | 122 | CL01 | 192.168.2.22/24 | Windows 11 domain client |
+  | 125 | ops01 | 192.168.2.25 | Jenkins (existing, shut down during lab) |
+  - Gateway 192.168.2.1. DC01 uses itself as DNS after promotion; DNS forwarders 192.168.2.1 and 1.1.1.1. CL01 uses 192.168.2.21 as DNS.
+- Sizing: DC01 2 vCPU / 4 GB RAM / 60 GB disk; CL01 2 vCPU / 4 GB RAM / 64 GB disk; both UEFI (OVMF), CL01 additionally Secure Boot + vTPM 2.0 (Windows 11 requirement). Disks thin-provisioned on local-lvm. vCPUs may be overcommitted, RAM is not. RAM can be increased later if needed.
