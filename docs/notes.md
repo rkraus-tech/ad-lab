@@ -48,3 +48,19 @@
   - Solution: "Load Driver" -> virtio-win CD -> `vioscsi\2k25\amd64` -> "Red Hat VirtIO SCSI pass-through controller" -> 60 GB disk appeared.
 - Administrator password: >= 14 characters, avoided y/z and layout-dependent special characters because of possible keyboard mismatches in the noVNC console; stored in a password manager. Ctrl+Alt+Del sent via the noVNC extra-keys menu.
 - Post-install: ran `virtio-win-guest-tools.exe` (all VirtIO drivers + QEMU guest agent). Verified in Proxmox Summary: guest agent reports IP addresses -> network driver and agent working.
+
+## Phase 4 - Promotion to domain controller
+- `sconfig` (Server Configuration tool) used for the base config:
+  - Static IP 192.168.2.21/24, gateway 192.168.2.1, DNS temporarily 192.168.2.1 (DNS role not installed yet; the promotion switches DNS to the DC itself).
+  - Hostname changed from the random `WIN-...` name to `DC01` + reboot - must happen BEFORE promotion, renaming a DC later is complex.
+  - Remote Desktop enabled (NLA only); further work via RDP from the laptop for copy/paste.
+- AD DS role installed via PowerShell (`Install-WindowsFeature AD-Domain-Services -IncludeManagementTools`). Role installation and promotion are two separate steps.
+- Promotion with `Install-ADDSForest`: new forest/domain `lab.home.arpa`, NetBIOS `LAB`, integrated DNS. Separate DSRM password stored in the password manager. Expected warning about missing DNS delegation (no parent zone `home.arpa`).
+- Result: domain and forest functional level Windows Server 2025, DC01 holds the PDC emulator role.
+- DNS hardening after promotion:
+  - Forwarders were inherited as 192.168.2.1 and `fe80::1` (link-local, interface-bound and fragile) -> replaced with 192.168.2.1 and 1.1.1.1 (lesson from the unreliable router DNS in phase 1).
+  - DNS client was only `127.0.0.1` -> set to own static IP first, loopback second (best practice).
+  - Verified internal zone (`dc01.lab.home.arpa` -> 192.168.2.21) and forwarding (`microsoft.com` resolves).
+- Evaluation activation verified with `slmgr /xpr`: time-based activation until 18.04.2027.
+- Proxmox: DC01 "Start at boot" enabled, start order 1 with 60 s startup delay - the DC must be up before any client.
+- Commands documented in `scripts/01-Promote-DC.ps1`.
