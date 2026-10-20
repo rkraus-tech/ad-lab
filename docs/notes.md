@@ -119,3 +119,16 @@
 - First domain logon as `LAB\sarah.becker` on CL01: forced password change worked.
 - AGDLP verified from the client: `whoami` = `lab\sarah.becker`, file created on `\\DC01\Sales`, `\\DC01\IT` -> Access denied.
 - Commands documented in `scripts/04-Join-Client.ps1`.
+
+## Phase 8 - Group Policy
+- Password policy for domain accounts only works at domain level (Default Domain Policy); a password GPO linked to an OU only affects local accounts. Different rules per group would need Fine-Grained Password Policies (FGPP).
+- Values (modern NIST/BSI guidance instead of 90-day rotation): min length 14, complexity on, history 24, max age 0 (no forced expiry), min age 1 day (prevents cycling through the history), lockout after 5 failed attempts for 15 min. Set with `Set-ADDefaultDomainPasswordPolicy`.
+  - Verified on CL01 as a normal user: `net accounts /domain` shows length 14 and lockout threshold 5.
+- GPO `U_Sales_Desktop_Wallpaper` (prefix `U_` = user settings only, computer half disabled):
+  - Image stored in NETLOGON (`\\lab.home.arpa\NETLOGON\Wallpaper\sales.jpg`) - replicated with SYSVOL, readable by all domain users; a local path would not exist on the client.
+  - Policy "Desktop Wallpaper" set via `Set-GPRegistryValue`, linked only to `_LAB\Users\Sales`.
+- Challenge 1: GPMC "Settings" report blocked by IE Enhanced Security Configuration (`about:security_mmc.exe`) -> added this internal MMC pseudo-URL to the trusted zone; the report is generated locally by the console.
+- Challenge 2: Report showed "Wallpaper Style" empty and an "Extra Registry Settings" block. Cause: style value `10` is the scale of the normal user setting; the policy uses 0-5 (4 = Fill). Fixed with `Set-GPRegistryValue ... -Value "4"`.
+- Test (positive): `LAB\sarah.becker` (OU Sales) -> `gpupdate /force` + re-logon -> new wallpaper; `gpresult /r /scope user` lists `U_Sales_Desktop_Wallpaper` under Applied GPOs; token contains GG_Sales and DL_Share_Sales_RW.
+- Test (negative): `LAB\tom.mueller` (OU IT) -> Applied GPOs `N/A`, default wallpaper; token contains GG_IT, DL_Share_Sales_R, DL_Share_IT_RW. Proves the OU-targeted link.
+- Commands documented in `scripts/05-Create-GPOs.ps1`.
