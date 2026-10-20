@@ -64,3 +64,23 @@
 - Evaluation activation verified with `slmgr /xpr`: time-based activation until 18.04.2027.
 - Proxmox: DC01 "Start at boot" enabled, start order 1 with 60 s startup delay - the DC must be up before any client.
 - Commands documented in `scripts/01-Promote-DC.ps1`.
+
+## Phase 5 - OU structure, AGDLP groups, shares, test users
+- OU design decision: hybrid structure. Default `Users`/`Computers` are containers (no GPO links, no clean delegation), so a custom root OU `_LAB` was created (underscore sorts it to the top):
+  `_LAB` -> `Users` (`IT`, `Sales`), `Groups`, `Computers` (`Clients`). Allows GPOs for all users/computers or per department.
+- All OUs created via PowerShell (`New-ADOrganizationalUnit`), protected from accidental deletion by default.
+- AGDLP implemented (Accounts -> Global groups -> Domain Local groups -> Permissions), naming convention `GG_` / `DL_`:
+  | Group | Scope | Purpose | Members |
+  |---|---|---|---|
+  | GG_IT | Global | Role IT | tom.mueller |
+  | GG_Sales | Global | Role Sales | sarah.becker |
+  | DL_Share_Sales_RW | Domain Local | Modify on Sales | GG_Sales |
+  | DL_Share_Sales_R | Domain Local | Read on Sales | GG_IT |
+  | DL_Share_IT_RW | Domain Local | Modify on IT | GG_IT |
+- Resources: `C:\Shares\Sales` and `C:\Shares\IT` shared as `\\DC01\Sales` and `\\DC01\IT`. NTFS: inheritance removed, only Administrators/SYSTEM + DL groups. Share permissions broad (Authenticated Users: Change) so NTFS is the single source of truth. Access-Based Enumeration enabled.
+  - Lab simplification: shares on the DC; in production they belong on a dedicated file server.
+- Test users created manually first (to learn the required attributes): `tom.mueller` (IT, System Administrator) and `sarah.becker` (Sales, Sales Representative), UPN `@lab.home.arpa`, "change password at next logon" enabled.
+  - Initial password read with `Read-Host -AsSecureString` so it never appears in plain text in history or scripts.
+  - Pitfall: pasting a multi-line block that starts with `Read-Host` makes PowerShell consume the next pasted line as input -> run the `Read-Host` line separately.
+- Closing the PowerShell window lost only variables, not AD objects; verified current state with `Get-ADUser`/`icacls` before continuing.
+- Commands documented in `scripts/02-Create-Structure.ps1`.
