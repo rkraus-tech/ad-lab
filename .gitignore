@@ -1,0 +1,32 @@
+﻿# ad-lab .gitignore
+# --- Unredacted screenshot originals: NEVER commit ---
+screenshots/raw/
+
+# --- Secrets ---
+secrets/
+.env
+*.pfx
+*.p12
+*.key
+*.pem
+
+# --- VM images / ISOs ---
+*.iso
+*.vhd
+*.vhdx
+*.qcow2
+*.vmdk
+*.img
+
+# --- Logs / exports ---
+*.log
+*.evtx
+*.etl
+transcripts/
+
+# --- Windows / editor ---
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.vscode/
+*.tmp
