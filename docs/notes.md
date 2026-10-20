@@ -99,3 +99,23 @@
   3. Second run -> 6 x "Skipped (exists)" (idempotency proven).
 - Verification: GG_IT and GG_Sales each have 4 members (manual test user + 3 imported).
 - Pitfall: the last pasted line in the RDP PowerShell was not executed (missing Enter) - always check that the final command actually ran.
+
+## Phase 7 - Windows 11 client CL01 & domain join
+- VM 122 `CL01`: same base as DC01 (q35, OVMF + Secure Boot, VirtIO SCSI single, guest agent, VirtIO NIC on vmbr0, CPU host, 2 cores) plus:
+  - vTPM 2.0 on local-lvm (Windows 11 refuses to install without TPM 2.0 + Secure Boot).
+  - 64 GB disk (Windows 11 minimum).
+  - 4096 MiB with ballooning down to 2048 MiB (acceptable for a client, not for a DC).
+  - "Start at boot" off (client depends on the DC and should not reserve RAM permanently).
+- Installation: Windows 11 Enterprise Evaluation (Home cannot join a domain), VirtIO storage driver `vioscsi\w11\amd64` loaded during setup.
+- OOBE: no network driver yet -> "I don't have internet" -> local emergency admin `localadmin` (no Microsoft account on a company device). Then `virtio-win-guest-tools.exe`.
+- Static IP 192.168.2.22, DNS 192.168.2.21.
+- Challenge: `Resolve-DnsName lab.home.arpa` returned "DNS name does not exist".
+  - Analysis: `Get-DnsClientServerAddress` showed IPv4 DNS = DC01, but IPv6 DNS = `fe80::1` (the Speedport advertises itself via Router Advertisement/RDNSS). The client asked the router, which answered NXDOMAIN. `Resolve-DnsName ... -Server 192.168.2.21` worked -> DC fine, client DNS order wrong.
+  - Solution (lab): IPv6 DNS also pointed to DC01's link-local address. IPv6 stays enabled (disabling IPv6 is discouraged by Microsoft).
+  - In production: configure RA/DHCPv6 on the network so the DCs are advertised as DNS servers.
+- Best practice: `redircmp` on DC01 so new computer accounts land in `_LAB\Computers\Clients` instead of the default `Computers` container (no GPO links possible on containers). CL01 appeared there automatically.
+- Domain join: `Add-Computer ... -Credential` hung because the credential dialog did not appear in the noVNC console (Ctrl+C was swallowed by the browser) -> closed the window, joined via `sysdm.cpl` instead.
+- Observation: a sign-in attempt as `sarah.becker` accidentally on the DC01 console failed with "The sign-in method you're trying to use isn't allowed" -> expected, normal users have no "Allow log on locally" right on domain controllers.
+- First domain logon as `LAB\sarah.becker` on CL01: forced password change worked.
+- AGDLP verified from the client: `whoami` = `lab\sarah.becker`, file created on `\\DC01\Sales`, `\\DC01\IT` -> Access denied.
+- Commands documented in `scripts/04-Join-Client.ps1`.
