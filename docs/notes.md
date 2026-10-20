@@ -7,3 +7,13 @@
 - `.gitignore`: excludes `screenshots/raw/` (unredacted originals must never be published), secrets (`secrets/`, `.env`, `*.pfx`, `*.key`, `*.pem`), VM images/ISOs, logs and Windows/editor junk.
 - `.gitattributes`: CRLF for `*.ps1/*.psm1/*.psd1/*.csv` (Windows tooling), LF for Markdown, images marked as binary.
 - Decision: First line of `.gitignore`/`.gitattributes` is a comment, because Windows PowerShell 5.1 `Set-Content -Encoding utf8` writes a UTF-8 BOM that could otherwise break the first pattern.
+
+## Phase 1 - ISO downloads & DNS issue on pve01
+- Downloaded ISOs directly to Proxmox storage `local` via "Download from URL" (no detour through the laptop): `virtio-win.iso` (VirtIO drivers), `WS2025-eval-en-us.iso` (Windows Server 2025 Evaluation, 180 days), `Win11-Ent-eval-en-us.iso` (Windows 11 Enterprise Evaluation, 90 days; Home edition cannot join a domain).
+- Decision: en-US ISOs so UI, screenshots and error messages match the English documentation; keyboard/region set to German during setup.
+- Issue 1: "Parameter verification failed (400) - filename: wrong file extension" -> typo in the file name; Proxmox only accepts `.iso` files in the ISO store.
+- Issue 2: Windows 11 download failed twice with `wget: unable to resolve host address 'software-static.download.prss.microsoft.com'`.
+  - Analysis: task log showed the Microsoft fwlink redirect (302) worked, but resolving the CDN host failed. `/etc/resolv.conf` listed only the router (192.168.2.1) as nameserver; `getent hosts` returned inconsistent results (sometimes IPv6 only, sometimes nothing) -> unreliable router DNS, single point of failure.
+  - Fix: pve01 -> System -> DNS: kept 192.168.2.1 as DNS server 1 (local names), added 1.1.1.1 and 9.9.9.9 as fallbacks. Verified with `getent ahostsv4 ...` (IPv4 address returned).
+  - Retried using the direct CDN URL from the task log instead of the fwlink redirect -> download succeeded (200 OK).
+- Lesson: always read the task log before retrying; a host with a single DNS server has no redundancy.
