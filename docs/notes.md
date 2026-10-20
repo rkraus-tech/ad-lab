@@ -84,3 +84,18 @@
   - Pitfall: pasting a multi-line block that starts with `Read-Host` makes PowerShell consume the next pasted line as input -> run the `Read-Host` line separately.
 - Closing the PowerShell window lost only variables, not AD objects; verified current state with `Get-ADUser`/`icacls` before continuing.
 - Commands documented in `scripts/02-Create-Structure.ps1`.
+
+## Phase 6 - Bulk user import from CSV
+- `configs/users.csv`: only business data (FirstName, LastName, Department, Title) - no passwords, no AD-specific fields, so HR can maintain it. 6 users (3 IT, 3 Sales), no umlauts in names.
+- `scripts/03-Import-Users.ps1`:
+  - Derives sAMAccountName (`firstname.lastname`), UPN (`@lab.home.arpa`), target OU and role group (GG_IT / GG_Sales) from the department via a single lookup table.
+  - One initial password prompted with `Read-Host -AsSecureString`, "change password at next logon" enabled.
+  - `[CmdletBinding(SupportsShouldProcess)]` -> supports `-WhatIf` dry runs.
+  - Idempotent: existing users are skipped instead of failing.
+  - Validation of unknown departments and per-row try/catch, so one bad record does not abort the whole import; summary of Created/Skipped/Error at the end.
+- Workflow on DC01: copied script + CSV via the RDP clipboard to `C:\Scripts`, then:
+  1. Dry run with `-WhatIf` -> 6 x "WhatIf", correct OUs.
+  2. Real run -> 6 x "Created".
+  3. Second run -> 6 x "Skipped (exists)" (idempotency proven).
+- Verification: GG_IT and GG_Sales each have 4 members (manual test user + 3 imported).
+- Pitfall: the last pasted line in the RDP PowerShell was not executed (missing Enter) - always check that the final command actually ran.
