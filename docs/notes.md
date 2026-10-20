@@ -17,3 +17,8 @@
   - Fix: pve01 -> System -> DNS: kept 192.168.2.1 as DNS server 1 (local names), added 1.1.1.1 and 9.9.9.9 as fallbacks. Verified with `getent ahostsv4 ...` (IPv4 address returned).
   - Retried using the direct CDN URL from the task log instead of the fwlink redirect -> download succeeded (200 OK).
 - Lesson: always read the task log before retrying; a host with a single DNS server has no redundancy.
+
+## Phase 1 - Resource check
+- Host pve01: 15.5 GiB RAM (~4.2 GiB used), `local` ~57 GB free, `local-lvm` (LVM-Thin) ~147 GB free -> enough for DC (60 GB) and client (64 GB) even if fully allocated.
+- Existing VM 125 (ops01, Jenkins from the release-ops-pipeline project) reserves 4 GiB RAM.
+- Decision: Shut down ops01 (graceful ACPI shutdown, not Stop, to protect PostgreSQL) during the AD lab to free RAM for the two Windows VMs.
