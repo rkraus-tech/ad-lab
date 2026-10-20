@@ -35,3 +35,16 @@
   | 125 | ops01 | 192.168.2.25 | Jenkins (existing, shut down during lab) |
   - Gateway 192.168.2.1. DC01 uses itself as DNS after promotion; DNS forwarders 192.168.2.1 and 1.1.1.1. CL01 uses 192.168.2.21 as DNS.
 - Sizing: DC01 2 vCPU / 4 GB RAM / 60 GB disk; CL01 2 vCPU / 4 GB RAM / 64 GB disk; both UEFI (OVMF), CL01 additionally Secure Boot + vTPM 2.0 (Windows 11 requirement). Disks thin-provisioned on local-lvm. vCPUs may be overcommitted, RAM is not. RAM can be increased later if needed.
+
+## Phase 3 - DC01 VM & Windows Server installation
+- Created VM 121 `DC01` via Proxmox "Create VM": OS type Windows 11/2022/2025, ISO `WS2025-eval-en-us.iso` + second CD drive with `virtio-win.iso`.
+- System: q35, OVMF (UEFI) with EFI disk on local-lvm and pre-enrolled keys (Secure Boot), VirtIO SCSI single controller, QEMU guest agent enabled, no TPM (not required for Server 2025, no BitLocker planned on the DC).
+- Disk: scsi0 60 GB on local-lvm with Discard, IO thread and SSD emulation (TRIM returns freed blocks to the thin pool).
+- CPU: 1 socket / 2 cores, type `host` (single node, no live migration needed). The type field looked greyed out at first but could be changed.
+- Memory: 4096 MiB fixed (minimum = maximum) - no ballooning for a domain controller; balloon device kept for accurate memory reporting.
+- Network: VirtIO on vmbr0, firewall flag enabled.
+- Installation: English (US) UI, German time/currency format and German keyboard; edition "Windows Server 2025 Standard Evaluation (Desktop Experience)" for the GUI management tools.
+- Challenge: Setup showed no disk ("Select location to install" list empty) because Windows has no driver for the VirtIO SCSI controller.
+  - Solution: "Load Driver" -> virtio-win CD -> `vioscsi\2k25\amd64` -> "Red Hat VirtIO SCSI pass-through controller" -> 60 GB disk appeared.
+- Administrator password: >= 14 characters, avoided y/z and layout-dependent special characters because of possible keyboard mismatches in the noVNC console; stored in a password manager. Ctrl+Alt+Del sent via the noVNC extra-keys menu.
+- Post-install: ran `virtio-win-guest-tools.exe` (all VirtIO drivers + QEMU guest agent). Verified in Proxmox Summary: guest agent reports IP addresses -> network driver and agent working.
